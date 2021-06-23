@@ -1,2 +1,4 @@
-./main/stylegan2_ada_pytorch/network-snapshot-000128_last.pkl
-./StyleGAN2_django/aws_config.py
+main/stylegan2_ada_pytorch/network-snapshot-000128_last.pkl
+StyleGAN2_django/aws_config.py
+.vscode
+*.pyc

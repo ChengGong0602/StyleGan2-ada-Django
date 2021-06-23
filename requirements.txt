@@ -5,3 +5,4 @@ click
 torch
 Pillow
 requests
+boto3

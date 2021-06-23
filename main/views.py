@@ -11,10 +11,17 @@ from typing import List, Optional
 import torch
 from main.stylegan2_ada_pytorch import dnnlib
 from main.stylegan2_ada_pytorch import legacy
-
+import boto3
+from botocore.client import Config 
 import PIL.Image
 import numpy as np
-
+from StyleGAN2_django.aws_config import (
+    AWS_ACCESS_KEY,  
+    AWS_SECRET_KEY,
+    AWS_BUCKET_NAME,
+    AWS_REGION,
+    AWS_STORAGE_PREFIX
+)
 def num_range(s: str) -> List[int]:
     '''Accept either a comma separated list of numbers 'a,b,c' or a range 'a-c' and return as a list of ints.'''
 
@@ -75,14 +82,17 @@ def generate_images(
     label = torch.zeros([1, G.c_dim], device=device)
 
     # Generate images.
+    file_list = []
     for seed_idx, seed in enumerate(seeds):
         print('Generating image for seed %d (%d/%d) ...' % (seed, seed_idx, len(seeds)))
         z = torch.from_numpy(np.random.RandomState(seed).randn(1, G.z_dim)).to(device)
         # img = G(z, label, truncation_psi=truncation_psi, noise_mode=noise_mode)
         img = G(z, label, truncation_psi=truncation_psi, noise_mode=noise_mode, force_fp32=True)
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
-        PIL.Image.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{outdir}/seed{seed:04d}_{str(truncation_psi)}.png')
-
+        filename = f'{outdir}/seed{seed:04d}_{str(truncation_psi)}.png'
+        PIL.Image.fromarray(img[0].cpu().numpy(), 'RGB').save(filename)
+        file_list.append(filename)
+    return file_list
 def home(request):
     return render(request, 'Mainpage/home.html', {})
 
@@ -90,18 +100,26 @@ def home(request):
 def create_image(request):
     # try:
         if request.method == "POST":
+            s3 = boto3.resource(    
+                "s3",
+                aws_access_key_id=AWS_ACCESS_KEY(),
+                aws_secret_access_key=AWS_SECRET_KEY(),
+                config=Config(signature_version="s3v4"),
+            )
             processing_result = ''
             seeds_list = request.data['seeds']
             trunc = request.data["trunc"]
             network_pkl = './main/stylegan2_ada_pytorch/network-snapshot-000128_last.pkl'
             seeds = num_range(seeds_list)
             truncation_psi = float(trunc)
-            generate_images(network_pkl, seeds,   truncation_psi, noise_mode ='const',outdir ='out')
-            
-            
-
-
-            return Response({'result': processing_result})
+            file_list = generate_images(network_pkl, seeds,   truncation_psi, noise_mode ='const',outdir ='out')
+            uploaded_filelist = []
+            for file in file_list:
+                with open(file, "rb") as data:
+                    bucket_object_name = file.split("/")[-1]
+                    s3.Bucket(AWS_BUCKET_NAME()).put_object(Key=bucket_object_name,Body=data,ACL="public-read")
+                    uploaded_filelist.append(AWS_STORAGE_PREFIX() + bucket_object_name)
+            return Response({'result': "success", 'data':uploaded_filelist})
 
     # except Exception as error:
     #     return Response({'result': str(error)})
