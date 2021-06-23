@@ -98,7 +98,7 @@ def home(request):
 
 @api_view(['POST'])
 def create_image(request):
-    # try:
+    try:
         if request.method == "POST":
             s3 = boto3.resource(    
                 "s3",
@@ -121,5 +121,5 @@ def create_image(request):
                     uploaded_filelist.append(AWS_STORAGE_PREFIX() + bucket_object_name)
             return Response({'result': "success", 'data':uploaded_filelist})
 
-    # except Exception as error:
-    #     return Response({'result': str(error)})
+    except Exception as error:
+        return Response({'result': str(error)})
