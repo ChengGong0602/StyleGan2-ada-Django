@@ -1,2 +1,7 @@
 django
 djangorestframework
+numpy
+click
+torch
+Pillow
+requests
